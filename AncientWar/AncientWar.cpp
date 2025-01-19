@@ -295,7 +295,7 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
                         b3Hglt = false;
                     }
                 }
-                if (cur_pos.x >= b2Rect.left && cur_pos.x <= b2Rect.right)
+                else if (cur_pos.x >= b2Rect.left && cur_pos.x <= b2Rect.right)
                 {
                     if (!b2Hglt)
                     {
@@ -305,7 +305,7 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
                         b3Hglt = false;
                     }
                 }
-                if (cur_pos.x >= b3Rect.left && cur_pos.x <= b3Rect.right)
+                else if (cur_pos.x >= b3Rect.left && cur_pos.x <= b3Rect.right)
                 {
                     if (!b3Hglt)
                     {
@@ -313,6 +313,16 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
                         b1Hglt = false;
                         b2Hglt = false;
                         b3Hglt = true;
+                    }
+                }
+                else
+                {
+                    if (b1Hglt || b2Hglt || b3Hglt)
+                    {
+                        if (sound)mciSendString(L"play .\\res\\snd\\click.wav", NULL, NULL, NULL);
+                        b1Hglt = false;
+                        b2Hglt = false;
+                        b3Hglt = false;
                     }
                 }
 
@@ -704,11 +714,11 @@ void CreateResources()
                 if (intro_frame > 23)intro_frame = 0;
             }
             show_text[i] = init_text[i];
-            Draw->DrawTextW(show_text, i, bigText, D2D1::RectF(50.0f, 100.0f, scr_width, scr_height), txtBrush);
+            Draw->DrawTextW(show_text, i, bigText, D2D1::RectF(50.0f, 200.0f, scr_width, scr_height), txtBrush);
             Draw->EndDraw();
             Sleep(80);
         }
-        Sleep(3000);
+        Sleep(2800);
     }
 }
 
