@@ -108,6 +108,14 @@ ID2D1Bitmap* bmpEvil3[8]{ nullptr };
 
 ///////////////////////////////////////////////////
 
+dll::Object Hero = nullptr;
+float hero_dest_x = 0;
+float hero_dest_y = 0;
+
+
+
+///////////////////////////////////////////////////
+
 template<typename T>concept CanBeReleased = requires(T var)
 {
     var.Release();
@@ -174,6 +182,11 @@ void InitGame()
     secs = 180;
     wcscpy_s(current_player, L"ONE TARLYO");
     name_set = false;
+
+    ClearHeap(&Hero);
+    
+    Hero = dll::CreatureFactory(scr_width / 2 - 50.0f, ground - 50.0f, hero_flag);
+
 }
 
 void GameOver()
@@ -401,8 +414,17 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
         }
         break;
 
+    case WM_RBUTTONDOWN:
+        if (Hero)
+        {
+            hero_dest_x = LOWORD(lParam);
+            hero_dest_y = HIWORD(lParam);
 
-
+            if (hero_dest_x < Hero->start.x)Hero->dir = dirs::left;
+            else Hero->dir = dirs::right;
+            Hero->Move((float)(level), hero_dest_x, hero_dest_y);
+        }
+        break;
 
 
 
@@ -760,6 +782,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         ////////////////////////////////////////////////////////////////////////////////
 
+        if (Hero)
+        {
+            if ((Hero->dir == dirs::right && Hero->end.x < hero_dest_x)
+                || (Hero->dir == dirs::left && Hero->start.x > hero_dest_x))
+                Hero->Move((float)(level), hero_dest_x, hero_dest_y);
+        }
+
 
 
 
@@ -805,7 +834,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             ++field_frame;
             if (field_frame > 15)field_frame = 0;
         }
+        ///////////////////////////////////////////////////////////////////
 
+        // DRAW HERO ********************************
+
+        if (Hero)
+        {
+            int curr_frame = Hero->GetFrame();
+
+            if (Hero->dir == dirs::right)
+                Draw->DrawBitmap(bmpHeroR[curr_frame], Resizer(bmpHeroR[curr_frame], Hero->start.x, Hero->start.y));
+            else 
+                Draw->DrawBitmap(bmpHeroL[curr_frame], Resizer(bmpHeroL[curr_frame], Hero->start.x, Hero->start.y));
+        }
 
 
 
