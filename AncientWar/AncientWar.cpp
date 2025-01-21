@@ -108,11 +108,17 @@ ID2D1Bitmap* bmpEvil3[8]{ nullptr };
 
 ///////////////////////////////////////////////////
 
+dll::RANDiT RandMachine{};
+
 dll::Object Hero = nullptr;
 float hero_dest_x = 0;
 float hero_dest_y = 0;
+bool hero_attacking = false;
+float shot_dest_x = 0;
+float shot_dest_y = 0;
 
-
+std::vector<dll::Object> vEvils;
+std::vector<dll::Object> vShots;
 
 ///////////////////////////////////////////////////
 
@@ -186,6 +192,12 @@ void InitGame()
     ClearHeap(&Hero);
     
     Hero = dll::CreatureFactory(scr_width / 2 - 50.0f, ground - 50.0f, hero_flag);
+
+    if (!vEvils.empty())for (int i = 0; i < vEvils.size(); ++i)ClearHeap(&vEvils[i]);
+    vEvils.clear();
+
+    if (!vShots.empty())for (int i = 0; i < vShots.size(); ++i)ClearHeap(&vShots[i]);
+    vShots.clear();
 
 }
 
@@ -426,8 +438,15 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
         }
         break;
 
-
-
+    case WM_LBUTTONDOWN:
+        if (hero_attacking)break;
+        if (Hero)
+        {
+            hero_attacking = true;
+            shot_dest_x = (float)(LOWORD(lParam));
+            shot_dest_y = (float)(HIWORD(lParam));
+        }
+        break;
 
 
 
@@ -789,10 +808,61 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 Hero->Move((float)(level), hero_dest_x, hero_dest_y);
         }
 
+        if (vEvils.size() < 5 + level && RandMachine(0, 20) == 6)
+        {
+            float ev_x = static_cast<float>(RandMachine(50, (int)(scr_width - 50.0f)));
+            float ev_y = static_cast<float>(RandMachine(50, 200));
+            
+            switch (RandMachine(0, 3))
+            {
+            case 0:
+                vEvils.push_back(dll::CreatureFactory(ev_x, ev_y, evil1_flag));
+                break;
 
+            case 1:
+                vEvils.push_back(dll::CreatureFactory(ev_x, ev_y, evil2_flag));
+                break;
 
+            case 2:
+                vEvils.push_back(dll::CreatureFactory(ev_x, ev_y, evil3_flag));
+                break;
 
+            case 3:
+                vEvils.push_back(dll::CreatureFactory(ev_x, ev_y, evil_med_flag));
+                break;
+            }
+        }
 
+        if (!vEvils.empty() && Hero)
+        {
+            dll::PROTON_MESH EvilMesh(vEvils.size());
+
+            for (int i = 0; i < vEvils.size(); i++)
+            {
+                dll::PROTON OneProton{ vEvils[i]->start.x, vEvils[i]->start.y,
+                      vEvils[i]->GetWidth(),vEvils[i]->GetHeight() };
+                EvilMesh.push_back(OneProton);
+            }
+
+            for (int i = 0; i < vEvils.size(); i++)
+            {
+                dll::PROT_POINT to_where = vEvils[i]->AINextMove(EvilMesh, Hero->start.x, Hero->start.y);
+                vEvils[i]->Move((float)(level), to_where.x, to_where.y);
+            }
+        }
+
+        if (!vShots.empty())
+        {
+            for (std::vector<dll::Object>::iterator shot = vShots.begin(); shot < vShots.end(); ++shot)
+            {
+                if (!(*shot)->Move((float)(level), NULL, NULL))
+                {
+                    (*shot)->Release();
+                    vShots.erase(shot);
+                    break;
+                }
+            }
+        }
 
         // DRAW THINGS **************************************************
 
@@ -848,9 +918,56 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 Draw->DrawBitmap(bmpHeroL[curr_frame], Resizer(bmpHeroL[curr_frame], Hero->start.x, Hero->start.y));
         }
 
+        if (!vEvils.empty())
+        {
+            for (int i = 0; i < vEvils.size(); ++i)
+            {
+                int aframe = vEvils[i]->GetFrame();
 
+                switch (vEvils[i]->GetType())
+                {
+                case evil1_flag:
+                    Draw->DrawBitmap(bmpEvil1[aframe], Resizer(bmpEvil1[aframe], vEvils[i]->start.x, vEvils[i]->start.y));
+                    break;
 
+                case evil2_flag:
+                    Draw->DrawBitmap(bmpEvil2[aframe], Resizer(bmpEvil2[aframe], vEvils[i]->start.x, vEvils[i]->start.y));
+                    break;
 
+                case evil3_flag:
+                    Draw->DrawBitmap(bmpEvil3[aframe], Resizer(bmpEvil3[aframe], vEvils[i]->start.x, vEvils[i]->start.y));
+                    break;
+
+                case evil_med_flag:
+                    Draw->DrawBitmap(bmpEvilMed[aframe], Resizer(bmpEvilMed[aframe], vEvils[i]->start.x, vEvils[i]->start.y));
+                    break;
+
+                }
+            }
+        }
+
+        if (Hero && hero_attacking)
+        {
+            if (Hero->Attack() > 0)
+            {
+                hero_attacking = false;
+
+                if (Hero->dir == dirs::left)
+                    vShots.push_back(dll::ShotFactory(Hero->start.x, Hero->start.y, shot_dest_x, shot_dest_y));
+                else
+                    vShots.push_back(dll::ShotFactory(Hero->end.x, Hero->start.y, shot_dest_x, shot_dest_y));
+            }
+        }
+
+        if (!vShots.empty())
+        {
+            for (std::vector<dll::Object>::iterator shot = vShots.begin(); shot < vShots.end(); ++shot)
+            {
+                int aframe = (*shot)->GetFrame();
+
+                Draw->DrawBitmap(bmpShot[aframe], Resizer(bmpShot[aframe], (*shot)->start.x, (*shot)->start.y));
+            }
+        }
 
 
         Draw->EndDraw();
