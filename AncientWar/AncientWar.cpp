@@ -846,7 +846,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
             for (int i = 0; i < vEvils.size(); i++)
             {
-                dll::PROT_POINT to_where = vEvils[i]->AINextMove(EvilMesh, Hero->start.x, Hero->start.y);
+                dll::PROT_POINT to_where{ vEvils[i]->AINextMove(EvilMesh, Hero->start.x, Hero->start.y) };
+                if (vEvils[i]->GetType() == evil_med_flag)
+                {
+                    for (int k = 0; k < vEvils.size(); ++k)
+                    {
+                        if (k != i && vEvils[k]->lifes < 50)
+                            to_where = vEvils[i]->AINextMove(EvilMesh, vEvils[k]->start.x, vEvils[k]->start.y);
+                    }
+                }
+                
                 vEvils[i]->Move((float)(level), to_where.x, to_where.y);
             }
         }
