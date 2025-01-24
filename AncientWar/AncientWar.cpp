@@ -105,6 +105,8 @@ ID2D1Bitmap* bmpEvilMed[19]{ nullptr };
 ID2D1Bitmap* bmpEvil1[18]{ nullptr };
 ID2D1Bitmap* bmpEvil2[14]{ nullptr };
 ID2D1Bitmap* bmpEvil3[8]{ nullptr };
+ID2D1Bitmap* bmpRIP = nullptr;
+ID2D1Bitmap* bmpPotion = nullptr;
 
 ///////////////////////////////////////////////////
 
@@ -117,8 +119,13 @@ bool hero_attacking = false;
 float shot_dest_x = 0;
 float shot_dest_y = 0;
 
+float RIP_x = 0;
+float RIP_y = 0;
+bool hero_killed = false;
+
 std::vector<dll::Object> vEvils;
 std::vector<dll::Object> vShots;
+std::vector<dll::PROTON> vPotions;
 
 ///////////////////////////////////////////////////
 
@@ -170,6 +177,9 @@ void ClearResources()
     for (int i = 0; i < 18; ++i)if (!ClearHeap(&bmpEvil1[i]))LogError(L"Error clearing bmpEvil1 !");
     for (int i = 0; i < 14; ++i)if (!ClearHeap(&bmpEvil2[i]))LogError(L"Error clearing bmpEvil2 !");
     for (int i = 0; i < 8; ++i)if (!ClearHeap(&bmpEvil3[i]))LogError(L"Error clearing bmpEvil3 !");
+
+    if (!ClearHeap(&bmpRIP))LogError(L"Error clearing bmpRIP !");
+    if (!ClearHeap(&bmpPotion))LogError(L"Error clearing bmpPotion !");
 }
 void ErrExit(int what)
 {
@@ -199,6 +209,7 @@ void InitGame()
     if (!vShots.empty())for (int i = 0; i < vShots.size(); ++i)ClearHeap(&vShots[i]);
     vShots.clear();
 
+    vPotions.clear();
 }
 
 void GameOver()
@@ -709,6 +720,9 @@ void CreateResources()
                     ErrExit(eD2D);
                 }
             }
+
+            bmpRIP = Load(L".\\res\\img\\rip.png", Draw);
+            bmpPotion = Load(L".\\res\\img\\potion.png", Draw);
         }
 
         hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), 
@@ -759,7 +773,7 @@ void CreateResources()
             Draw->EndDraw();
             Sleep(80);
         }
-        Sleep(2800);
+        Sleep(1500);
     }
 }
 
@@ -808,7 +822,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 Hero->Move((float)(level), hero_dest_x, hero_dest_y);
         }
 
-        if (vEvils.size() < 5 + level && RandMachine(0, 20) == 6)
+        if (vEvils.size() < 3 + level && RandMachine(0, 20) == 6)
         {
             float ev_x = static_cast<float>(RandMachine(50, (int)(scr_width - 50.0f)));
             float ev_y = static_cast<float>(RandMachine(50, 200));
@@ -857,7 +871,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 }
                 
                 vEvils[i]->Move((float)(level), to_where.x, to_where.y);
-            }
+            }    
+        
         }
 
         if (!vShots.empty())
@@ -872,6 +887,89 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 }
             }
         }
+
+        if (!vEvils.empty() && !vShots.empty())
+        {
+            bool killed = false;
+            
+            for (std::vector<dll::Object>::iterator evil = vEvils.begin(); evil < vEvils.end(); ++evil)
+            {
+                for (std::vector<dll::Object>::iterator shot = vShots.begin(); shot < vShots.end(); ++shot)
+                {
+                    if (!((*shot)->start.x > (*evil)->end.x || (*shot)->end.x < (*evil)->start.x
+                        || (*shot)->start.y>(*evil)->end.y || (*shot)->end.y < (*evil)->start.y))
+                    {
+                        (*shot)->Release();
+                        vShots.erase(shot);
+                        (*evil)->lifes -= 10;
+                        if ((*evil)->lifes <= 0)
+                        {
+                            if (sound)mciSendString(L"play .\\res\\snd\\evilkilled.wav", NULL, NULL, NULL);
+                            if (RandMachine(0, 10) == 6)vPotions.push_back(dll::PROTON((*evil)->start.x, (*evil)->start.y,
+                                32.0f, 32.0f));
+                            (*evil)->Release();
+                            vEvils.erase(evil);
+                            score += 5 * level;
+                            killed = true;
+                        }
+                        break;
+                    }
+                }
+
+                if (killed)break;
+            }   
+        }
+
+        if (!vEvils.empty() && Hero)
+        {
+            for (std::vector<dll::Object>::iterator evil = vEvils.begin(); evil < vEvils.end(); ++evil)
+            {
+                if (!((*evil)->start.x > Hero->end.x || (*evil)->end.x < Hero->start.x
+                    || (*evil)->start.y>Hero->end.y || (*evil)->end.y < Hero->start.y))
+                {
+                    Hero->lifes -= (*evil)->Attack();
+                    if (sound)mciSendString(L"play .\\res\\snd\\hurt.wav", NULL, NULL, NULL);
+                    if (Hero->lifes <= 0)
+                    {
+                        RIP_x = Hero->start.x;
+                        RIP_y = Hero->start.y;
+                        hero_killed = true;
+                        ClearHeap(&Hero);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!vPotions.empty() && Hero)
+        {
+            for (std::vector<dll::PROTON>::iterator pot = vPotions.begin(); pot < vPotions.end(); ++pot)
+            {
+                if (pot->end.y <= ground)
+                {
+                    pot->start.y += level / 5.0f;
+                    pot->SetEdges();
+                    if (!(Hero->start.x > pot->end.x || Hero->end.x < pot->start.x
+                        || Hero->start.y > pot->end.y || Hero->end.y < pot->start.y))
+                    {
+                        if (Hero->lifes + 20 <= 100)Hero->lifes += 20;
+                        else score += 20;
+                        if (sound)mciSendString(L"play .\\res\\snd\\takeasset.wav", NULL, NULL, NULL);
+                        vPotions.erase(pot);
+                        break;
+                    }
+                }
+                else
+                {
+                    if (sound)mciSendString(L"play .\\res\\snd\\break.wav", NULL, NULL, NULL);
+                    vPotions.erase(pot);
+                    break;
+                }
+
+            }
+        }
+
+
 
         // DRAW THINGS **************************************************
 
@@ -917,6 +1015,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         // DRAW HERO ********************************
 
+        if (hero_killed)
+        {
+            PlaySound(NULL, NULL, NULL);
+            Draw->DrawBitmap(bmpRIP, D2D1::RectF(RIP_x, RIP_y, RIP_x + 43.0f, RIP_y + 50.0f));
+            Draw->EndDraw();
+            if (sound)PlaySound(L".\\res\\snd\\killed.wav", NULL, SND_SYNC);
+            else Sleep(3000);
+            GameOver();
+        }
+        
         if (Hero)
         {
             int curr_frame = Hero->GetFrame();
@@ -925,6 +1033,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 Draw->DrawBitmap(bmpHeroR[curr_frame], Resizer(bmpHeroR[curr_frame], Hero->start.x, Hero->start.y));
             else 
                 Draw->DrawBitmap(bmpHeroL[curr_frame], Resizer(bmpHeroL[curr_frame], Hero->start.x, Hero->start.y));
+
+            Draw->DrawLine(D2D1::Point2F(Hero->start.x - 5.0f, Hero->end.y + 5.0f),
+                D2D1::Point2F(Hero->start.x - 5.0f + Hero->lifes / 3.0f, Hero->end.y + 5.0f), txtBrush, 5.0f);
         }
 
         if (!vEvils.empty())
@@ -952,6 +1063,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                     break;
 
                 }
+
+                Draw->DrawLine(D2D1::Point2F(vEvils[i]->start.x - 5.0f, vEvils[i]->end.y + 5.0f),
+                    D2D1::Point2F(vEvils[i]->start.x - 5.0f + vEvils[i]->lifes / 3.0f, vEvils[i]->end.y + 5.0f),txtBrush, 5.0f);
             }
         }
 
@@ -978,6 +1092,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             }
         }
 
+        if (!vPotions.empty())
+            for (int i = 0; i < vPotions.size(); ++i)
+                Draw->DrawBitmap(bmpPotion, D2D1::RectF(vPotions[i].start.x, vPotions[i].start.y,
+                    vPotions[i].end.x, vPotions[i].end.y));
 
         Draw->EndDraw();
 
