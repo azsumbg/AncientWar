@@ -213,7 +213,38 @@ void InitGame()
 
     vPotions.clear();
 }
+BOOL CheckRecord()
+{
+    if (score < 1)return no_record;
 
+    int result = 0;
+    CheckFile(record_file, &result);
+    if (result == FILE_NOT_EXIST)
+    {
+        std::wofstream rec(record_file);
+        rec << score << std::endl;
+        for (int i = 0; i < 16; ++i)rec << static_cast<int>(current_player[i]) << std::endl;
+        rec.close();
+        return first_record;
+    }
+    else
+    {
+        std::wifstream check(record_file);
+        check >> result;
+        check.close();
+    }
+
+    if (score > result)
+    {
+        std::wofstream rec(record_file);
+        rec << score << std::endl;
+        for (int i = 0; i < 16; ++i)rec << static_cast<int>(current_player[i]) << std::endl;
+        rec.close();
+        return record;
+    }
+
+    return no_record;
+}
 void GameOver()
 {
     PlaySound(NULL, NULL, NULL);
@@ -539,12 +570,45 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
         break;
 
     case WM_LBUTTONDOWN:
-        if (hero_attacking)break;
-        if (Hero)
+        if (HIWORD(lParam) <= 50)
         {
-            hero_attacking = true;
-            shot_dest_x = (float)(LOWORD(lParam));
-            shot_dest_y = (float)(HIWORD(lParam));
+            if (LOWORD(lParam) >= b1Rect.left && (LOWORD(lParam) <= b1Rect.right))
+            {
+                if (name_set)
+                {
+                    if(sound)mciSendString(L"play .\\res\\snd\\negative.wav",NULL,NULL,NULL);
+                    break;
+                }
+                if (sound)mciSendString(L"play .\\res\\snd\\select.wav", NULL, NULL, NULL);
+                if (DialogBox(bIns, MAKEINTRESOURCE(IDD_PLAYER), hwnd, &DlgProc) == IDOK)name_set = true;
+                break;
+            }
+            if (LOWORD(lParam) >= b2Rect.left && (LOWORD(lParam) <= b2Rect.right))
+            {
+                mciSendString(L"play .\\res\\snd\\select.wav", NULL, NULL, NULL);
+                if (sound)
+                {
+                    sound = false;
+                    PlaySound(NULL, NULL, NULL);
+                    break;
+                }
+                else
+                {
+                    sound = true;
+                    PlaySound(sound_file, NULL, SND_ASYNC | SND_LOOP);
+                    break;
+                }
+            }
+        }
+        else
+        {
+            if (hero_attacking)break;
+            if (Hero)
+            {
+                hero_attacking = true;
+                shot_dest_x = (float)(LOWORD(lParam));
+                shot_dest_y = (float)(HIWORD(lParam));
+            }
         }
         break;
 
@@ -827,7 +891,7 @@ void CreateResources()
             hr = iWriteFactory->CreateTextFormat(L"Segoe Print", NULL, DWRITE_FONT_WEIGHT_EXTRA_BLACK, DWRITE_FONT_STYLE_OBLIQUE,
                 DWRITE_FONT_STRETCH_NORMAL, 18, L"", &nrmText);
             hr = iWriteFactory->CreateTextFormat(L"Segoe Print", NULL, DWRITE_FONT_WEIGHT_EXTRA_BLACK, DWRITE_FONT_STYLE_OBLIQUE,
-                DWRITE_FONT_STRETCH_NORMAL, 32, L"", &midText);
+                DWRITE_FONT_STRETCH_NORMAL, 24, L"", &midText);
             hr = iWriteFactory->CreateTextFormat(L"Segoe Print", NULL, DWRITE_FONT_WEIGHT_EXTRA_BLACK, DWRITE_FONT_STYLE_OBLIQUE,
                 DWRITE_FONT_STRETCH_NORMAL, 64, L"", &bigText);
             
@@ -848,7 +912,7 @@ void CreateResources()
 
         mciSendString(L"play .\\res\\snd\\morse.wav", NULL, NULL, NULL);
 
-        for (int i = 0; i < 32; i++)
+        for (int i = 0; i < 34; i++)
         {
             Draw->BeginDraw();
             Draw->DrawBitmap(bmpIntro[intro_frame], D2D1::RectF(0, 0, scr_width, scr_height));
@@ -1060,8 +1124,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             }
         }
 
-
-
         // DRAW THINGS **************************************************
 
         Draw->BeginDraw();
@@ -1188,10 +1250,41 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 Draw->DrawBitmap(bmpPotion, D2D1::RectF(vPotions[i].start.x, vPotions[i].start.y,
                     vPotions[i].end.x, vPotions[i].end.y));
 
+        wchar_t status_txt[150] = L"\0";
+        wchar_t add[5] = L"\0";
+        int stat_size = 0;
+
+        wcscpy_s(status_txt, current_player);
+        
+        wcscat_s(status_txt, L", ниво: ");
+        wsprintf(add, L"%d", level);
+        wcscat_s(status_txt, add);
+        
+        wcscat_s(status_txt, L", резултат: ");
+        wsprintf(add, L"%d", score);
+        wcscat_s(status_txt, add);
+
+        wcscat_s(status_txt, L", оставащо време: 0");
+        wsprintf(add, L"%d", mins);
+        wcscat_s(status_txt, add);
+        wcscat_s(status_txt, L" : ");
+        if (secs - mins * 60 < 10)wcscat_s(status_txt, L"0");
+        wsprintf(add, L"%d", secs - mins * 60);
+        wcscat_s(status_txt, add);
+
+        for (int i = 0; i < 150; ++i)
+        {
+            if (status_txt[i] != '\0')stat_size++;
+            else break;
+        }
+
+        if (midText && hgltBrush)
+            Draw->DrawTextW(status_txt, stat_size, midText, D2D1::RectF(10.0f, ground + 5.0f, scr_width, scr_height), hgltBrush);
+
+
+        ////////////////////////////////////////////////////
+        
         Draw->EndDraw();
-
-        ///////////////////////////////////////////////////////////////////
-
     }
 
     std::remove(tmp_file);
