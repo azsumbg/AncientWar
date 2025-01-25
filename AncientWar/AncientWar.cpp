@@ -247,13 +247,94 @@ BOOL CheckRecord()
 }
 void GameOver()
 {
+    Draw->EndDraw();
     PlaySound(NULL, NULL, NULL);
     KillTimer(bHwnd, bTimer);
 
+    Draw->BeginDraw();
+    Draw->DrawBitmap(bmpIntro[0], D2D1::RectF(0, 0, scr_width, scr_height));
 
+    if (bigText && hgltBrush)
+    {
+        switch (CheckRecord())
+        {
+        case no_record:
+            Draw->DrawTextW(L"О, О, О ! ЗАГУБИ !", 19, bigText, D2D1::RectF(70.0f, 300.0f, scr_width, scr_height), hgltBrush);
+            Draw->EndDraw();
+            if (sound)PlaySound(L".\\res\\snd\\loose.wav", NULL, SND_SYNC);
+            else Sleep(2000);
+            break;
+
+        case first_record:
+            Draw->DrawTextW(L"ПЪРВИ РЕКОРД !", 15, bigText, D2D1::RectF(90.0f, 300.0f, scr_width, scr_height), hgltBrush);
+            Draw->EndDraw();
+            if (sound)PlaySound(L".\\res\\snd\\record.wav", NULL, SND_SYNC);
+            else Sleep(2000);
+            break;
+        
+        case record:
+            Draw->DrawTextW(L"НОВ СВЕТОВЕН РЕКОРД !", 22, bigText, D2D1::RectF(50.0f, 300.0f, scr_width, scr_height), hgltBrush);
+            Draw->EndDraw();
+            if (sound)PlaySound(L".\\res\\snd\\record.wav", NULL, SND_SYNC);
+            else Sleep(2000);
+            break;
+        }
+    }
 
     bMsg.message = WM_QUIT;
     bMsg.wParam = 0;
+}
+void HallOfFame()
+{
+    int result = 0;
+    CheckFile(record_file, &result);
+    if (result == FILE_NOT_EXIST)
+    {
+        if (sound)mciSendString(L"play .\\res\\snd\\negative.wav", NULL, NULL, NULL);
+        MessageBox(bHwnd, L"Все още няма рекорд на играта !\n\nПостарай се повече !",
+            L"Липсва файл !", MB_OK | MB_APPLMODAL | MB_ICONEXCLAMATION);
+        return;
+    }
+
+    wchar_t txt[100] = L"НАЙ-ДОБЪР БОЕЦ: ";
+    wchar_t add[5] = L"\0";
+    wchar_t saved_player[16] = L"\0";
+    int txt_size = 0;
+
+    std::wifstream rec(record_file);
+    rec >> result;
+    wsprintf(add, L"%d", result);
+    for (int i = 0; i < 16; i++)
+    {
+        int letter = 0;
+        rec >> letter;
+        saved_player[i] = static_cast<wchar_t>(letter);
+    }
+    rec.close();
+
+    wcscat_s(txt, saved_player);
+    wcscat_s(txt, L"\n\nСВЕТОВЕН РЕКОРД: ");
+    wcscat_s(txt, add);
+
+    result = 0;
+
+    for (int i = 0; i < 100; ++i)
+    {
+        if (txt[i] != '\0')result++;
+        else break;
+    }
+
+    Draw->EndDraw();
+
+    Draw->BeginDraw();
+    Draw->DrawBitmap(bmpIntro[0], D2D1::RectF(0, 0, scr_width, scr_height));
+    if (hgltBrush && midText)
+        Draw->DrawTextW(txt, result, midText, D2D1::RectF(100.0f, 200.0f, scr_width, scr_height), hgltBrush);
+    Draw->EndDraw();
+    if (sound)mciSendString(L"play .\\res\\snd\\showrec.wav", NULL, NULL, NULL);
+    Sleep(3000);
+
+
 }
 void LevelUp(int bonus)
 {
@@ -554,6 +635,12 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
             break;
 
 
+
+        case mHoF:
+            pause = true;
+            HallOfFame();
+            pause = false;
+            break;
         }
         break;
 
