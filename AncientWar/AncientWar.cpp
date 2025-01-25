@@ -118,6 +118,7 @@ float hero_dest_y = 0;
 bool hero_attacking = false;
 float shot_dest_x = 0;
 float shot_dest_y = 0;
+int evil_killed_counter = 0;
 
 float RIP_x = 0;
 float RIP_y = 0;
@@ -194,6 +195,7 @@ void InitGame()
 {
     level = 1;
     score = 0;
+    evil_killed_counter = 0;
     mins = 0;
     secs = 180;
     wcscpy_s(current_player, L"ONE TARLYO");
@@ -221,6 +223,88 @@ void GameOver()
 
     bMsg.message = WM_QUIT;
     bMsg.wParam = 0;
+}
+void LevelUp(int bonus)
+{
+    mins = 0;
+    secs = 180 + level * 10;
+    evil_killed_counter = 0;
+
+    ClearHeap(&Hero);
+
+    Hero = dll::CreatureFactory(scr_width / 2 - 50.0f, ground - 50.0f, hero_flag);
+
+    if (!vEvils.empty())for (int i = 0; i < vEvils.size(); ++i)ClearHeap(&vEvils[i]);
+    vEvils.clear();
+
+    if (!vShots.empty())for (int i = 0; i < vShots.size(); ++i)ClearHeap(&vShots[i]);
+    vShots.clear();
+
+    vPotions.clear();
+
+    score += bonus;
+
+    if (Draw && bigText && txtBrush)
+    {
+        int intro_frame = 0;
+
+        Draw->BeginDraw();
+        Draw->DrawBitmap(bmpIntro[intro_frame], D2D1::RectF(0, 0, scr_width, scr_height));
+        Draw->DrawTextW(L"НИВОТО ПРЕМИНАТО !", 19, bigText, D2D1::RectF(50.0f, 300.f, scr_width, scr_height), txtBrush);
+        Draw->EndDraw();
+        if (sound)
+        {
+            PlaySound(NULL, NULL, NULL);
+            PlaySound(L".\\res\\snd\\levelup.wav", NULL, SND_SYNC);
+            PlaySound(sound_file, NULL, SND_ASYNC | SND_LOOP);
+        }
+        else Sleep(2500);
+
+        if (bonus > 0)
+        {
+            mciSendString(L"play .\\res\\snd\\morse.wav", NULL, NULL, NULL);
+            int counter = 0;
+
+            while (bonus > 0)
+            {
+                wchar_t bonus_text[30]{ L"БОНУС ЗА НИВОТО: " };
+                wchar_t add[5] = L"\0";
+                int txt_size = 0;
+
+                --bonus;
+                counter += 10 + level;
+                wsprintf(add, L"%d", counter);
+                wcscat_s(bonus_text, add);
+
+                for (int i = 0; i < 30; ++i)
+                {
+                    if (bonus_text[i] != '\0')txt_size++;
+                    else break;
+                }
+
+                Draw->BeginDraw();
+                Draw->DrawBitmap(bmpIntro[intro_frame], D2D1::RectF(0, 0, scr_width, scr_height));
+                Draw->DrawTextW(bonus_text, txt_size, bigText, D2D1::RectF(50.0f, 300.f, scr_width, scr_height), txtBrush);
+                Draw->EndDraw();
+                Sleep(100);
+
+                if (bonus % 3 == 0)
+                {
+                    ++intro_frame;
+                    if (intro_frame > 23)intro_frame = 0;
+                }
+            }
+        }
+        else
+        {
+            Draw->BeginDraw();
+            Draw->DrawBitmap(bmpIntro[intro_frame], D2D1::RectF(0, 0, scr_width, scr_height));
+            Draw->DrawTextW(L"НЯМА БОНУС !", 11, bigText, D2D1::RectF(350.0f, 300.f, scr_width, scr_height), txtBrush);
+            Draw->EndDraw();
+        }
+
+        Sleep(2000);
+    }
 }
 
 INT_PTR CALLBACK DlgProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lParam)
@@ -300,6 +384,11 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
         if (pause)break;
         secs--;
         mins = secs / 60;
+        if (secs <= 0)
+        {
+            Draw->EndDraw();
+            LevelUp(evil_killed_counter);
+        }
         break;
 
     case WM_PAINT:
@@ -425,7 +514,7 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
                 pause = false;
                 break;
             }
-            //LevelUp();
+            LevelUp(0);
             pause = false;
             break;
 
@@ -752,8 +841,8 @@ void CreateResources()
 
     if (Draw && bigText && txtBrush)
     {
-        wchar_t init_text[32] = L"АНТИЧНИ ВОЙНИ !\n\n   dev. Daniel";
-        wchar_t show_text[32] = L"\0";
+        wchar_t init_text[34] = L"АНТИЧНИ ВОЙНИ !\n\n   dev. Daniel !";
+        wchar_t show_text[34] = L"\0";
 
         int intro_frame = 0;
 
@@ -769,11 +858,11 @@ void CreateResources()
                 if (intro_frame > 23)intro_frame = 0;
             }
             show_text[i] = init_text[i];
-            Draw->DrawTextW(show_text, i, bigText, D2D1::RectF(50.0f, 200.0f, scr_width, scr_height), txtBrush);
+            Draw->DrawTextW(show_text, i, bigText, D2D1::RectF(70.0f, 200.0f, scr_width, scr_height), txtBrush);
             Draw->EndDraw();
             Sleep(80);
         }
-        Sleep(1500);
+        Sleep(1200);
     }
 }
 
@@ -905,7 +994,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                         if ((*evil)->lifes <= 0)
                         {
                             if (sound)mciSendString(L"play .\\res\\snd\\evilkilled.wav", NULL, NULL, NULL);
-                            if (RandMachine(0, 10) == 6)vPotions.push_back(dll::PROTON((*evil)->start.x, (*evil)->start.y,
+                            ++evil_killed_counter;
+                            if (RandMachine(0, 8) == 6)vPotions.push_back(dll::PROTON((*evil)->start.x, (*evil)->start.y,
                                 32.0f, 32.0f));
                             (*evil)->Release();
                             vEvils.erase(evil);
@@ -927,8 +1017,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 if (!((*evil)->start.x > Hero->end.x || (*evil)->end.x < Hero->start.x
                     || (*evil)->start.y>Hero->end.y || (*evil)->end.y < Hero->start.y))
                 {
-                    Hero->lifes -= (*evil)->Attack();
-                    if (sound)mciSendString(L"play .\\res\\snd\\hurt.wav", NULL, NULL, NULL);
+                    int damage = (*evil)->Attack();
+                    Hero->lifes -= damage;
+                    if (sound && damage > 0)mciSendString(L"play .\\res\\snd\\hurt.wav", NULL, NULL, NULL);
                     if (Hero->lifes <= 0)
                     {
                         RIP_x = Hero->start.x;
