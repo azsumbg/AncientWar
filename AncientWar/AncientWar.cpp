@@ -558,6 +558,65 @@ void LoadGame()
     if (sound)mciSendString(L"play .\\res\\snd\\save.wav", NULL, NULL, NULL);
     MessageBox(bHwnd, L"Играта е заредена !", L"Зареждане !", MB_OK | MB_APPLMODAL | MB_ICONINFORMATION);
 }
+void Help()
+{
+    int result = 0;
+    CheckFile(help_file, &result);
+    if (result == FILE_NOT_EXIST)
+    {
+        if (sound)mciSendString(L"play .\\res\\snd\\negative.wav", NULL, NULL, NULL);
+        MessageBox(bHwnd, L"Няма помощна информация за играта !\n\nСвържете се с разработчика !",
+            L"Липсва файл !", MB_OK | MB_APPLMODAL | MB_ICONEXCLAMATION);
+        return;
+    }
+
+    std::wifstream help(help_file);
+    wchar_t hlp[1000] = L"\0";
+    help >> result;
+    for (int i = 0; i < result; ++i)
+    {
+        int letter = 0;
+        help >> letter;
+        hlp[i] = static_cast<wchar_t>(letter);
+    }
+    help.close();
+
+    if (sound)mciSendString(L"play .\\res\\snd\\showrec.wav", NULL, NULL, NULL);
+
+    if (midText && hgltBrush)
+    {
+        Draw->BeginDraw();
+        if (b1Bckg && b2Bckg && b3Bckg && nrmText && txtBrush && hgltBrush && inactBrush)
+        {
+            Draw->FillRectangle(D2D1::RectF(0, 0, scr_width, 50.0f), inactBrush);
+            Draw->FillRoundedRectangle(D2D1::RoundedRect(b1Rect, 10.0f, 10.0f), b1Bckg);
+            Draw->FillRoundedRectangle(D2D1::RoundedRect(b2Rect, 10.0f, 10.0f), b2Bckg);
+            Draw->FillRoundedRectangle(D2D1::RoundedRect(b3Rect, 10.0f, 10.0f), b3Bckg);
+
+            if (name_set)
+                Draw->DrawTextW(L"ИМЕ НА ИГРАЧ", 13, nrmText, D2D1::RectF(b1Rect.left + 20.0f, b1Rect.top + 10.0f,
+                    b1Rect.right, b1Rect.bottom), inactBrush);
+            else
+            {
+                if (b1Hglt)Draw->DrawTextW(L"ИМЕ НА ИГРАЧ", 13, nrmText, D2D1::RectF(b1Rect.left + 20.0f, b1Rect.top + 10.0f,
+                    b1Rect.right, b1Rect.bottom), hgltBrush);
+                else Draw->DrawTextW(L"ИМЕ НА ИГРАЧ", 13, nrmText, D2D1::RectF(b1Rect.left + 20.0f, b1Rect.top + 10.0f,
+                    b1Rect.right, b1Rect.bottom), txtBrush);
+            }
+            if (b2Hglt)Draw->DrawTextW(L"ЗВУЦИ ON / OFF", 15, nrmText, D2D1::RectF(b2Rect.left + 20.0f, b2Rect.top + 10.0f,
+                b2Rect.right, b2Rect.bottom), hgltBrush);
+            else Draw->DrawTextW(L"ЗВУЦИ ON / OFF", 15, nrmText, D2D1::RectF(b2Rect.left + 20.0f, b2Rect.top + 10.0f,
+                b2Rect.right, b2Rect.bottom), txtBrush);
+            if (b3Hglt)Draw->DrawTextW(L"ПОМОЩ ЗА ИГРАТА", 16, nrmText, D2D1::RectF(b3Rect.left + 20.0f, b3Rect.top + 10.0f,
+                b3Rect.right, b3Rect.bottom), hgltBrush);
+            else Draw->DrawTextW(L"ПОМОЩ ЗА ИГРАТА", 16, nrmText, D2D1::RectF(b3Rect.left + 20.0f, b3Rect.top + 10.0f,
+                b3Rect.right, b3Rect.bottom), txtBrush);
+        }
+        Draw->DrawBitmap(bmpIntro[0], D2D1::RectF(0, 50.0f, scr_width, scr_height));
+        Draw->DrawTextW(hlp, result, midText, D2D1::RectF(50.0f, 100.0f, scr_width, scr_height), hgltBrush);
+        Draw->EndDraw();
+    }
+}
 
 INT_PTR CALLBACK DlgProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -836,12 +895,30 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
                     break;
                 }
             }
+            if (LOWORD(lParam) >= b3Rect.left && (LOWORD(lParam) <= b3Rect.right))
+            {
+                Draw->EndDraw();
+                if (!show_help)
+                {
+                    show_help = true;
+                    pause = true;
+                    Help();
+                    break;
+                }
+                else
+                {
+                    show_help = false;
+                    pause = false;
+                    break;
+                }
+            }
         }
         else
         {
             if (hero_attacking)break;
             if (Hero)
             {
+                if (sound)mciSendString(L"play .\\res\\snd\\boom.wav", NULL, NULL, NULL);
                 hero_attacking = true;
                 shot_dest_x = (float)(LOWORD(lParam));
                 shot_dest_y = (float)(HIWORD(lParam));
@@ -1178,7 +1255,7 @@ void CreateResources()
             Draw->EndDraw();
             Sleep(80);
         }
-        Sleep(1200);
+        Sleep(2200);
     }
 }
 
@@ -1194,6 +1271,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     }
 
     CreateResources();
+
+    PlaySound(sound_file, NULL, SND_ASYNC | SND_LOOP);
 
     while (bMsg.message != WM_QUIT)
     {
