@@ -105,10 +105,17 @@ ID2D1Bitmap* bmpEvilMed[19]{ nullptr };
 ID2D1Bitmap* bmpEvil1[18]{ nullptr };
 ID2D1Bitmap* bmpEvil2[14]{ nullptr };
 ID2D1Bitmap* bmpEvil3[8]{ nullptr };
+ID2D1Bitmap* bmpHornet[7]{ nullptr };
 ID2D1Bitmap* bmpRIP = nullptr;
 ID2D1Bitmap* bmpPotion = nullptr;
 
 ///////////////////////////////////////////////////
+
+struct HORNET
+{
+    dll::PROTON Hornet{};
+    dirs dir = dirs::down;
+};
 
 dll::RANDiT RandMachine{};
 
@@ -127,6 +134,7 @@ bool hero_killed = false;
 std::vector<dll::Object> vEvils;
 std::vector<dll::Object> vShots;
 std::vector<dll::PROTON> vPotions;
+std::vector<HORNET> vHornets;
 
 ///////////////////////////////////////////////////
 
@@ -178,6 +186,7 @@ void ClearResources()
     for (int i = 0; i < 18; ++i)if (!ClearHeap(&bmpEvil1[i]))LogError(L"Error clearing bmpEvil1 !");
     for (int i = 0; i < 14; ++i)if (!ClearHeap(&bmpEvil2[i]))LogError(L"Error clearing bmpEvil2 !");
     for (int i = 0; i < 8; ++i)if (!ClearHeap(&bmpEvil3[i]))LogError(L"Error clearing bmpEvil3 !");
+    for (int i = 0; i < 7; ++i)if (!ClearHeap(&bmpHornet[i]))LogError(L"Error clearing bmpHornet !");
 
     if (!ClearHeap(&bmpRIP))LogError(L"Error clearing bmpRIP !");
     if (!ClearHeap(&bmpPotion))LogError(L"Error clearing bmpPotion !");
@@ -212,6 +221,8 @@ void InitGame()
     vShots.clear();
 
     vPotions.clear();
+
+    vHornets.clear();
 }
 BOOL CheckRecord()
 {
@@ -353,6 +364,8 @@ void LevelUp(int bonus)
     vShots.clear();
 
     vPotions.clear();
+
+    vHornets.clear();
 
     score += bonus;
 
@@ -858,6 +871,23 @@ void CreateResources()
                     ErrExit(eD2D);
                 }
             }
+            for (int i = 0; i < 7; ++i)
+            {
+                wchar_t name[100] = L".\\res\\img\\hornet\\";
+                wchar_t add[100] = L"\0";
+
+                wsprintf(add, L"%d", i);
+                wcscat_s(name, add);
+                wcscat_s(name, L".png");
+
+                bmpHornet[i] = Load(name, Draw);
+
+                if (!bmpHornet[i])
+                {
+                    LogError(L"Error loading bmpHornet !");
+                    ErrExit(eD2D);
+                }
+            }
             for (int i = 0; i < 12; ++i)
             {
                 wchar_t name[100] = L".\\res\\img\\hero\\l\\";
@@ -1211,6 +1241,107 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             }
         }
 
+        if (RandMachine(0, 200) == 66 && vHornets.size() <= 3 + level)
+        {
+            switch (RandMachine(0, 3))
+            {
+            case 0:
+                vHornets.push_back(HORNET(dll::PROTON((float)(RandMachine(100, 700)), sky, 30.0f, 23.0f), dirs::down));
+                break;
+
+            case 1:
+                vHornets.push_back(HORNET(dll::PROTON((float)(RandMachine(100, 700)), ground, 30.0f, 23.0f), dirs::up));
+                break;
+
+            case 2:
+                vHornets.push_back(HORNET(dll::PROTON(scr_width, (float)(RandMachine(100, 500)), 30.0f, 23.0f), dirs::right));
+                break;
+
+            case 3:
+                vHornets.push_back(HORNET(dll::PROTON(0, (float)(RandMachine(100, 500)), 30.0f, 23.0f), dirs::left));
+                break;
+            }
+        }
+
+        if (!vHornets.empty())
+        {
+           for (std::vector<HORNET>::iterator hornet = vHornets.begin(); hornet < vHornets.end(); ++hornet)
+            {
+                bool gone = false;
+                switch (hornet->dir)
+                {
+                case dirs::up:
+                    hornet->Hornet.start.y -= (float)(level);
+                    hornet->Hornet.SetEdges();
+                    if (hornet->Hornet.end.y <= sky)
+                    {
+                        vHornets.erase(hornet);
+                        gone = true;
+                        break;
+                    }
+                    break;
+
+                case dirs::down:
+                    hornet->Hornet.start.y += (float)(level);
+                    hornet->Hornet.SetEdges();
+                    if (hornet->Hornet.start.y >= ground)
+                    {
+                        vHornets.erase(hornet);
+                        gone = true;
+                        break;
+                    }
+                    break;
+
+                case dirs::left:
+                    hornet->Hornet.start.x -= (float)(level);
+                    hornet->Hornet.SetEdges();
+                    if (hornet->Hornet.end.x <= 0)
+                    {
+                        vHornets.erase(hornet);
+                        gone = true;
+                        break;
+                    }
+                    break;
+
+                case dirs::right:
+                    hornet->Hornet.start.x += (float)(level);
+                    hornet->Hornet.SetEdges();
+                    if (hornet->Hornet.end.x >= scr_width)
+                    {
+                        vHornets.erase(hornet);
+                        gone = true;
+                        break;
+                    }
+                    break;
+                }
+
+                if (gone)break;
+            }
+        }
+
+        if (!vHornets.empty() && Hero)
+        {
+            for (std::vector<HORNET>::iterator hornet = vHornets.begin(); hornet < vHornets.end(); ++hornet)
+            {
+                if (!(Hero->start.x > hornet->Hornet.end.x || Hero->end.x < hornet->Hornet.start.x
+                    || Hero->start.y > hornet->Hornet.end.y || Hero->end.y < hornet->Hornet.start.y))
+                {
+                    Hero->lifes -= 5;
+                    vHornets.erase(hornet);
+                    if (sound)mciSendString(L"play .\\res\\snd\\hurt.wav", NULL, NULL, NULL);
+                    if (Hero->lifes <= 0)
+                    {
+                        RIP_x = Hero->start.x;
+                        RIP_y = Hero->start.y;
+                        hero_killed = true;
+                        ClearHeap(&Hero);
+                        break;
+                    }
+                    break;
+                }
+            }
+        }
+       
         // DRAW THINGS **************************************************
 
         Draw->BeginDraw();
@@ -1336,6 +1467,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             for (int i = 0; i < vPotions.size(); ++i)
                 Draw->DrawBitmap(bmpPotion, D2D1::RectF(vPotions[i].start.x, vPotions[i].start.y,
                     vPotions[i].end.x, vPotions[i].end.y));
+
+        static int hornet_frame = 0;
+        if (!vHornets.empty())
+            for (int i = 0; i < vHornets.size(); ++i)
+                Draw->DrawBitmap(bmpHornet[hornet_frame], D2D1::RectF(vHornets[i].Hornet.start.x, vHornets[i].Hornet.start.y,
+                    vHornets[i].Hornet.end.x, vHornets[i].Hornet.end.y));
+        ++hornet_frame;
+        if (hornet_frame > 6)hornet_frame = 0;
 
         wchar_t status_txt[150] = L"\0";
         wchar_t add[5] = L"\0";
