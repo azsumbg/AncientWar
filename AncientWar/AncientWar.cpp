@@ -431,6 +431,133 @@ void LevelUp(int bonus)
         Sleep(2000);
     }
 }
+void SaveGame()
+{
+    int result = 0;
+    CheckFile(save_file, &result);
+    if (result == FILE_EXIST)
+    {
+        if (sound)mciSendString(L"play .\\res\\snd\\exclamation.wav", NULL, NULL, NULL);
+        if (MessageBox(bHwnd, L"Има предишна записана игра !\n\n Да я презапиша ли ?", L"Презапис !",
+            MB_YESNO | MB_APPLMODAL | MB_ICONQUESTION) == IDNO)return;
+    }
+
+    std::wofstream save(save_file);
+
+    save << level << std::endl;
+    save << score << std::endl;
+    save << evil_killed_counter << std::endl;
+    save << mins << std::endl;
+    save << secs << std::endl;
+    for (int i = 0; i < 16; ++i)save << static_cast<int>(current_player[i]) << std::endl;
+    save << name_set << std::endl;
+    save << hero_killed << std::endl;
+    save << Hero->start.x << std::endl;
+    save << Hero->start.y << std::endl;
+    save << Hero->lifes << std::endl;
+    save << vEvils.size() << std::endl;
+    if (!vEvils.empty())
+    {
+        for (int i = 0; i < vEvils.size(); ++i)
+        {
+            save << vEvils[i]->GetType() << std::endl;
+            save << vEvils[i]->start.x << std::endl;
+            save << vEvils[i]->start.y << std::endl;
+            save << vEvils[i]->lifes << std::endl;
+        }
+    }
+
+    save.close();
+
+    if (sound)mciSendString(L"play .\\res\\snd\\save.wav", NULL, NULL, NULL);
+    MessageBox(bHwnd, L"Играта е запазена !", L"Запис !", MB_OK | MB_APPLMODAL | MB_ICONINFORMATION);
+}
+void LoadGame()
+{
+    int result = 0;
+    CheckFile(save_file, &result);
+    if (result == FILE_NOT_EXIST)
+    {
+        if (sound)mciSendString(L"play .\\res\\snd\\negative.wav", NULL, NULL, NULL);
+        MessageBox(bHwnd, L"Все още няма записана игра !\n\nПостарай се повече !",
+            L"Липсва файл !", MB_OK | MB_APPLMODAL | MB_ICONEXCLAMATION);
+        return;
+    }
+    else
+    {
+        if (sound)mciSendString(L"play .\\res\\snd\\exclamation.wav", NULL, NULL, NULL);
+        if (MessageBox(bHwnd, L"Има продължиш, ще загубиш тази игра !\n\n Да я презапиша ли ?", L"Презапис !",
+            MB_YESNO | MB_APPLMODAL | MB_ICONQUESTION) == IDNO)return;
+    }
+
+    ClearHeap(&Hero);
+
+    Hero = dll::CreatureFactory(scr_width / 2 - 50.0f, ground - 50.0f, hero_flag);
+
+    if (!vEvils.empty())for (int i = 0; i < vEvils.size(); ++i)ClearHeap(&vEvils[i]);
+    vEvils.clear();
+
+    if (!vShots.empty())for (int i = 0; i < vShots.size(); ++i)ClearHeap(&vShots[i]);
+    vShots.clear();
+
+    vPotions.clear();
+
+    vHornets.clear();
+
+    std::wifstream save(save_file);
+
+    save >> level;
+    save >> score;
+    save >> evil_killed_counter;
+    save >> mins;
+    save >> secs;
+    for (int i = 0; i < 16; ++i)
+    {
+        int letter = 0;
+        save >> letter;
+        current_player[i] = static_cast<wchar_t>(letter);
+    }
+    save >> name_set;
+    
+    save >> hero_killed;
+    
+    if (hero_killed)GameOver();
+
+    float hero_saved_x = 0;
+    float hero_saved_y = 0;
+
+    save >> hero_saved_x;
+    save >> hero_saved_y;
+    save >> result;
+    
+    Hero = dll::CreatureFactory(hero_saved_x, hero_saved_y, hero_flag);
+    Hero->lifes = result;
+    
+    save >> result;
+    if (result > 0)
+    {
+        for (int i = 0; i < result; ++i)
+        {
+            int evil_type = -1;
+            float evil_saved_x = 0;
+            float evil_saved_y = 0;
+            int evil_lifes = 0;
+            
+            save >> evil_type;
+            save >> evil_saved_x;
+            save >> evil_saved_y;
+            save >> evil_lifes;
+            
+            vEvils.push_back(dll::CreatureFactory(evil_saved_x, evil_saved_y, static_cast<uint8_t>(evil_type)));
+            vEvils[i]->lifes = evil_lifes;
+        }
+    }
+
+    save.close();
+
+    if (sound)mciSendString(L"play .\\res\\snd\\save.wav", NULL, NULL, NULL);
+    MessageBox(bHwnd, L"Играта е заредена !", L"Зареждане !", MB_OK | MB_APPLMODAL | MB_ICONINFORMATION);
+}
 
 INT_PTR CALLBACK DlgProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -647,7 +774,17 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
             SendMessage(hwnd, WM_CLOSE, NULL, NULL);
             break;
 
+        case mSave:
+            pause = true;
+            SaveGame();
+            pause = false;
+            break;
 
+        case mLoad:
+            pause = true;
+            LoadGame();
+            pause = false;
+            break;
 
         case mHoF:
             pause = true;
@@ -711,8 +848,6 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
             }
         }
         break;
-
-
 
     default: return DefWindowProc(hwnd, ReceivedMsg, wParam, lParam);
     }
@@ -1049,7 +1184,6 @@ void CreateResources()
 
 //////////////////////////////////////////////////
 
-
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
 {
     bIns = hInstance;
@@ -1191,6 +1325,33 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             }   
         }
 
+        if (!vHornets.empty() && !vShots.empty())
+        {
+            bool killed = false;
+
+            for (std::vector<HORNET>::iterator evil = vHornets.begin(); evil < vHornets.end(); ++evil)
+            {
+                for (std::vector<dll::Object>::iterator shot = vShots.begin(); shot < vShots.end(); ++shot)
+                {
+                    if (!((*shot)->start.x > evil->Hornet.end.x || (*shot)->end.x < evil->Hornet.start.x
+                        || (*shot)->start.y > evil->Hornet.end.y || (*shot)->end.y < evil->Hornet.start.y))
+                    {
+                        (*shot)->Release();
+                        vShots.erase(shot);
+
+                        if (sound)mciSendString(L"play .\\res\\snd\\evilkilled.wav", NULL, NULL, NULL);
+                        vHornets.erase(evil);
+                        score += level;
+                        killed = true;
+
+                        break;
+                    }
+                }
+
+                if (killed)break;
+            }
+        }
+
         if (!vEvils.empty() && Hero)
         {
             for (std::vector<dll::Object>::iterator evil = vEvils.begin(); evil < vEvils.end(); ++evil)
@@ -1254,11 +1415,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 break;
 
             case 2:
-                vHornets.push_back(HORNET(dll::PROTON(scr_width, (float)(RandMachine(100, 500)), 30.0f, 23.0f), dirs::right));
+                vHornets.push_back(HORNET(dll::PROTON(scr_width, (float)(RandMachine(100, 500)), 30.0f, 23.0f), dirs::left));
                 break;
 
             case 3:
-                vHornets.push_back(HORNET(dll::PROTON(0, (float)(RandMachine(100, 500)), 30.0f, 23.0f), dirs::left));
+                vHornets.push_back(HORNET(dll::PROTON(0, (float)(RandMachine(100, 500)), 30.0f, 23.0f), dirs::right));
                 break;
             }
         }
